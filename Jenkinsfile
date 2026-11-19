@@ -1,87 +1,121 @@
+
 pipeline {
     agent any
 
+    tools {
+        maven 'Maven'
+        jdk 'JDK17'
+    }
+
     environment {
-        DOCKER_IMAGE = "milind1122/java_applicationdevopsproject"
-        DOCKER_TAG = "${BUILD_NUMBER}"
-        REGION = "ap-south-1"
-        CLUSTER_NAME = "java-eks-cluster"
-        SONARQUBE_URL = "http://13.233.65.153:9000"
-        SONAR_PROJECT_KEY = "java-app"
-        SONAR_TOKEN = credentials('sonar-token') // Store token securely in Jenkins credentials
+        DOCKER_IMAGE = 'srushhg/educationapprepo'
+        SONAR_HOST = 'http://65.0.185.87:9000'
+        CONTAINER_NAME = 'educationapp'
+        APP_PORT = '8080'
     }
 
     stages {
-        stage('Checkout Code') {
+
+        stage('Git Checkout') {
             steps {
-                checkout scm
+                git branch: 'main',
+                    url: 'https://github.com/Srushti-111/educationapp.git'
             }
         }
 
-      stage('SonarQube Analysis') {
-    steps {
-        script {
-            docker.image('sonarsource/sonar-scanner-cli:latest').inside('--entrypoint=""') {
-                sh '''
-                sonar-scanner \
-                -Dsonar.projectKey=java-app \
-                -Dsonar.sources=. \
-                -Dsonar.host.url=http://13.233.65.153:9000 \
-                -Dsonar.token=$SONAR_TOKEN \
-                -Dsonar.userHome=$WORKSPACE/.sonar
-                '''
-            }
-        }
-    }
-}
-
-        stage('Build Docker Image') {
+        stage('Maven Build') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE:$DOCKER_TAG .'
+                sh 'mvn clean package'
             }
         }
 
-        stage('Docker Login') {
+        stage('SonarQube Analysis') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'docker-hub-cred',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
+                withCredentials([
+                    string(
+                        credentialsId: 'sonar-token',
+                        variable: 'SONAR_TOKEN'
+                    )
+                ]) {
                     sh '''
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
+                        -Dsonar.projectKey=my-project \
+                        -Dsonar.projectName=my-project \
+                        -Dsonar.host.url=http://65.0.185.87:9000 \
+                        -Dsonar.token=$SONAR_TOKEN
                     '''
                 }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Docker Build') {
             steps {
                 sh '''
-                docker push $DOCKER_IMAGE:$DOCKER_TAG
-                docker tag $DOCKER_IMAGE:$DOCKER_TAG $DOCKER_IMAGE:latest
-                docker push $DOCKER_IMAGE:latest
+                    docker build -t $DOCKER_IMAGE:latest .
                 '''
             }
         }
 
-        stage('Deploy to EKS') {
+        stage('Docker Login & Push') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+
+                        echo "$DOCKER_PASS" | docker login \
+                        -u "$DOCKER_USER" --password-stdin
+
+                        docker push $DOCKER_IMAGE:latest
+
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Docker Pull') {
             steps {
                 sh '''
-                aws eks update-kubeconfig --region $REGION --name $CLUSTER_NAME
-                kubectl set image deployment/java-war-deployment \
-                java-war-container=$DOCKER_IMAGE:$DOCKER_TAG
+                    docker pull $DOCKER_IMAGE:latest
                 '''
             }
         }
+
+       stage('Docker Run / Deploy') {
+    steps {
+        sh '''
+            docker rm -f educationapp || true
+
+            docker run -d \
+            --name educationapp \
+            --restart unless-stopped \
+            -p 8081:8080 \
+            srushhg/educationapprepo:latest
+
+            docker ps
+        '''
+    }
+}
     }
 
     post {
         success {
-            echo "Deployment Successful 🚀"
+            echo 'Pipeline completed successfully!'
+            echo 'Docker application deployed successfully!'
         }
+
         failure {
-            echo "Pipeline Failed ❌"
+            echo 'Pipeline failed!'
+        }
+
+        always {
+            echo 'Jenkins pipeline execution finished.'
         }
     }
 }
