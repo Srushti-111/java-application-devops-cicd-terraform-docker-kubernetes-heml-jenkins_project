@@ -8,9 +8,9 @@ pipeline {
     }
 
     environment {
-        DOCKER_IMAGE = 'srushhg/educationapprepo'
-        SONAR_HOST = 'http://65.0.185.87:9000'
-        CONTAINER_NAME = 'educationapp'
+        DOCKER_IMAGE = 'srushhg/java-web-application'
+        SONAR_HOST = 'http://3.6.90.197:9000'
+        CONTAINER_NAME = 'javawebapp'
         APP_PORT = '8080'
     }
 
@@ -19,7 +19,7 @@ pipeline {
         stage('Git Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Srushti-111/educationapp.git'
+                    url: 'https://github.com/Srushti-111/java-application-devops-cicd-terraform-docker-kubernetes-heml-jenkins_project.git'
             }
         }
 
@@ -41,7 +41,7 @@ pipeline {
                         mvn org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
                         -Dsonar.projectKey=my-project \
                         -Dsonar.projectName=my-project \
-                        -Dsonar.host.url=http://65.0.185.87:9000 \
+                        -Dsonar.host.url=http://3.6.90.197:9000 \
                         -Dsonar.token=$SONAR_TOKEN
                     '''
                 }
@@ -90,13 +90,13 @@ pipeline {
        stage('Docker Run / Deploy') {
     steps {
         sh '''
-            docker rm -f educationapp || true
+            docker rm -f javawebapp || true
 
             docker run -d \
             --name educationapp \
             --restart unless-stopped \
             -p 8081:8080 \
-            srushhg/educationapprepo:latest
+            srushhg/java-web-application
 
             docker ps
         '''
