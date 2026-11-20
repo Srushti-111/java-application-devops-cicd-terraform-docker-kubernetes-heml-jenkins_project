@@ -93,7 +93,7 @@ pipeline {
             docker rm -f javawebapp || true
 
             docker run -d \
-            --name educationapp \
+            --name javawebapp \
             --restart unless-stopped \
             -p 8081:8080 \
             srushhg/java-web-application
